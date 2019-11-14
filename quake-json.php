@@ -16,8 +16,10 @@
 // Version 1.12 - 21-Feb-2017 - corrected main USGS URL
 // Version 1.13 - 30-May-2017 - USGS provided tz info incorrect .. switch to using PHP TZ for times
 // Version 2.00 - 10-May-2018 - rewritten to use Leaflet/OpenStreetMaps + others for display
+// Version 2.01 - 29-Oct-2019 - adapted for Phillippines display of earthquake faults
+// Version 3.00 - 13-Nov-2019 - generalized for optional dislay of faults/tectonic plates from multiple sources
 
-  $Version = 'quake-json.php V2.00 - 10-May-2018';
+  $Version = 'quake-json.php V3.00 - 13-Nov-2019';
 //  error_reporting(E_ALL);  // uncomment to turn on full error reporting
 //
 // script available at http://saratoga-weather.org/scripts.php
@@ -144,10 +146,26 @@ $SITE['mapboxAPIkey'] = '-replace-this-with-your-API-key-here-';
 	//$mapProvider = 'Terrain'; // Terrain map by stamen.com - no key needed
 	//$mapProvider = 'OpenTopo'; // OpenTopoMap.com - no key needed
 	//$mapProvider = 'Wikimedia'; // Wikimedia map - no key needed
+	//$mapProvider = 'NatGeo';  // National Geographic world map -no key needed
 // 
 	//$mapProvider = 'MapboxSat';  // Maps by Mapbox.com - API KEY needed in $mapboxAPIkey 
 	//$mapProvider = 'MapboxTer';  // Maps by Mapbox.com - API KEY needed in $mapboxAPIkey 
 	$mapboxAPIkey = '--mapbox-API-key--';  // use this for the API key to MapBox
+	
+# for fault displays
+ $faultDisplay = 'USGS'; // ='' for none, see below for more choices
+# Note: not all fault displays have entries for all countries. You'll need to choose the one that
+#   displays the information for your geography.
+#
+# 'PH' covers the Phillipines only
+# 'USGS' covers the lower-48 CONUS states only but with fault types/names/ages
+# 'USGS2' covers all 50 US states, but with only small/medium/large fault types (no descriptions)
+# 'USGS3' covers the mostly western CONUS lower-48 states only  with fault names and types only
+# 'GEM' covers much of the world (omitting Canada, Scandanavia and UK/Ireland)
+# 'WORLD' covers most of the world with 4 fault types (  rift, step, tectonic contact, thrust-fault)
+# 'BGS' convers the UK (England, Wales, Scotland, Northern Ireland) 
+#
+ $plateDisplay = true; // =true; show tectonic plates , =false; suppress display of tectonic plates
 	
 // end of settings -------------------------------------------------------------
 
@@ -183,6 +201,8 @@ if (isset($SITE['timeFormat']))      {$timeFormat = $SITE['timeFormat'];}
 if (isset($SITE['cacheFileDir']))    {$cacheFileDir = $SITE['cacheFileDir']; }
 if (isset($SITE['distanceDisplay'])) {$distanceDisplay = $SITE['distanceDisplay']; }
 if (isset($SITE['mapboxAPIkey']))    {$mapboxAPIkey = $SITE['mapboxAPIkey']; }
+if (isset($SITE['faultDisplay']))    {$faultDisplay = $SITE['faultDisplay']; }
+if (isset($SITE['plateDisplay']))    {$plateDisplay = $SITE['plateDisplay']; }
 // end of overrides from Settings.php
 
 # Shim function if run outside of AJAX/PHP template set
@@ -213,11 +233,18 @@ if (isset($setTimeZone))        { $ourTZ = $setTimeZone; }
 if (isset($setTimeFormat))      { $timeFormat = $setTimeFormat; }
 if (isset($setMapProvider))     { $mapProvider = $setMapProvider; }
 if (isset($setMapboxAPIkey))    { $mapboxAPIkey = $setMapboxAPIkey; }
+if (isset($setFaultDisplay))    { $faultDisplay = $setFaultDisplay; }
+if (isset($setPlateDisplay))    { $plateDisplay = $setPlateDisplay; }
+
 
 // ------ start of code -------
 
 if(!isset($mapboxAPIkey)) {
 	$mapboxAPIkey = '--mapbox-API-key--';
+}
+$doDebug = false;
+if(isset($_REQUEST['debug'])) {
+  $doDebug = isset($_REQUEST['debug'])?true:false;
 }
 
 // table of available map tile providers
@@ -251,6 +278,18 @@ $mapTileProviders = array(
 		 'URL' =>'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
 		 'attrib' => ' &copy; <a href="https://opentopomap.org/">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>) | Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.',
 		 'maxzoom' => 15
+		  ),
+	'NatGeo' => array(
+	   'name' => 'Natgeo',
+    'URL' => 'https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}',
+	  'attrib' =>  'Tiles &copy; <a href="https://www.esri.com/en-us/home" title="Sources: National Geographic, Esri, Garmin, HERE, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, increment P Corp.">Esri</a>',
+	  'maxzoom' =>  12
+		  ),
+	'Delorme' => array(
+	   'name' => 'Delorme',
+    'URL' => 'https://services.arcgisonline.com/arcgis/rest/services/Specialty/DeLorme_World_Base_Map/MapServer/tile/{z}/{y}/{x}',
+	  'attrib' =>  'Tiles &copy; <a href="https://www.esri.com/en-us/home" title="Copyright:(c) 2018 Garmin">Garmin</a>',
+	  'maxzoom' =>  12
 		  ),
 	'MapboxTer' => array(
 	   'name' => 'Terrain3',
@@ -303,6 +342,31 @@ if ($maxDistance >= "15000") {$maxDistance = "15000";}
 if ( isset($_REQUEST['lat']) )     { $myLat = $_REQUEST['lat']; }
 if ( isset($_REQUEST['lon']) )     { $myLong = $_REQUEST['lon']; }
 if ( isset($_REQUEST['testloc']) ) { setTestLoc($_REQUEST['testloc']); } // allows for test override
+// --- testing options
+$locInfo = array(
+  'PH' => '14.35|121.00|Caloocan City',
+	'UK' => '51.5074|-0.1278|London',
+	'US' => '37.2746|-122.022|Saratoga',
+
+);
+$faultInfo = array(
+  'USGS' => 'USGS',
+	'USGS2' => 'USGS2',
+	'USGS3' => 'USGS3',
+	'PH'    => 'PH',
+	'GEM'   => 'GEM',
+	'WORLD' => 'WORLD',
+	'BGS'   => 'BGS'
+);
+if(isset($_REQUEST['loc']) and isset($locInfo[$_REQUEST['loc']])) {
+	list($myLat,$myLong,$ourLocationName) = explode('|',$locInfo[$_REQUEST['loc']]);
+}
+if(isset($_REQUEST['faults']) and isset($faultInfo[$_REQUEST['faults']])) {
+	$faultDisplay = $faultInfo[$_REQUEST['faults']];
+}
+
+// --- end testing options
+
 
 if ( isset($_REQUEST['cache'])) {$refetchSeconds = 1; }
 
@@ -760,11 +824,14 @@ if (file_exists($cacheName) and filemtime($cacheName) + $refetchSeconds > time()
   print "<script type=\"text/javascript\">\n// <![CDATA[\n";
 	print $JSONout;
 	$useLinkTarget = $doLinkTarget?'1':'0';
+  $debugTextOption = $doDebug?'true':'false';
 	print '// Leaflet/OpenStreetMap+other tile providers MAP production code
 var imagesDir = \''.$imagesDir.'\';  // our marker/cluster images locations
 var highMag = '.$highRichter.';      // highlight quakes >= this value
 var doLinkTarget = '.$useLinkTarget.';    // generate target="_blank" option
+var doDebug = '.$debugTextOption.';    // debug output in console.log
 ';
+	
 	// Generate map options
 	$mOpts = array();
 	$mList = '';  
@@ -808,14 +875,533 @@ var doLinkTarget = '.$useLinkTarget.';    // generate target="_blank" option
 	if(empty($mSelMap)) {$mSelMap = $mFirstMap;}
 	// end Generate map tile options
 	print '
+if(doDebug) {
+	console.log("Debug logging to console enabled");
+}
 
 var map = L.map(\'map\', {
 		center: new L.latLng('.$myLat.','.$myLong.'), 
 		zoom: '.$mapZoomDefault.',
 		layers: ['.$mSelMap.'],
+		tapTolerance: 25,
 		scrollWheelZoom: false
 		});
+		
+controlLayers = L.control.layers(baseLayers).addTo(map);
 
+L.control.scale().addTo(map);
+
+';
+if($plateDisplay) {
+	print '
+
+var plates = L.esri.dynamicMapLayer({
+    url: \'https://earthquake.usgs.gov/arcgis/rest/services/eq/map_plateboundaries/MapServer\',
+		f: \'geoJSON\',
+    opacity: 0.7,
+		attribution: \'Plates <a href="https://earthquake.usgs.gov/arcgis/rest/services/eq/map_plateboundaries/MapServer">USGS</a>\',
+  }).addTo(map);
+
+    plates.bindPopup(function (error, featureCollection) {
+    if (error || featureCollection.features.length === 0) {
+      return false;
+    } else {
+      return featureCollection.features[0].properties.NAME+" - " +featureCollection.features[0].properties.LABEL;
+    }
+  });
+    controlLayers.addOverlay(plates,"Plates");
+		makelegend(\'<span style="font-size: 20px">P</span>\',plates,\'USGS Plates Legend\');
+
+';
+} // end add plates
+
+if($faultDisplay == 'PH') {
+	print '// overlay for Phillippine faults
+	var faultColors = {
+		\'Trace approximate\' : \'#1A1A1A\',
+    \'Active Fault\' : \'#FF0000\',
+    \'approximate offshore projection\' : \'#267300\',
+    \'Trench\' : \'#002673\',
+    \'Collision zone\' : \'#FC921F\',
+    \'Transform Fault\' : \'#A80084\'
+	};
+	var faultLineStyles = {
+		\'Trace approximate\' : \'esriSLSDot\',
+    \'Active Fault\' : \'esriSLSSolid\',
+    \'approximate offshore projection\' : \'esriSLSDot\',
+    \'Trench\' : \'esriSLSSolid\',
+    \'Collision zone\' : \'esriSLSSolid\',
+    \'Transform Fault\' : \'esriSLSSolid\'
+	};
+	var weight = 2;
+	var opacity = 0.7;
+	
+  map.spin(true);
+	
+faults = L.esri.featureLayer({
+    url: \'https://services.arcgis.com/eSGO1QW0lYo90eNU/arcgis/rest/services/ActiveFaultTrenches/FeatureServer/0\',
+    opacity: 0.7,
+    style: function (feature)
+      {
+        if (feature.properties.DESC_ != null)
+        {
+
+					var dashValues = [];
+					var dashArray = null;
+					
+					switch (faultLineStyles[feature.properties.DESC_]) {
+						case \'esriSLSDash\':
+							dashValues = [4, 3];
+							break;
+						case \'esriSLSDot\':
+							dashValues = [1, 3];
+							break;
+						case \'esriSLSDashDot\':
+							dashValues = [8, 3, 1, 3];
+							break;
+						case \'esriSLSDashDotDot\':
+							dashValues = [8, 3, 1, 3, 1, 3];
+							break;
+					}
+					// use the dash values and the line weight to set dash array
+					if (dashValues.length > 0) {
+						for (var i = 0; i < dashValues.length; i++) {
+							dashValues[i] *= weight;
+						}
+					
+						dashArray = dashValues.join(\',\');
+					}
+					
+          return { "color": faultColors[feature.properties.DESC_], "dashArray":dashArray, "weight": weight, "opacity":opacity };
+        }
+        else
+        {
+          return { "color": "green", "weight": 1 };
+        }
+      },
+		attribution: \'Faults <a href="https://www.arcgis.com/home/item.html?id=e4b2bc9b68254609b5965b16163eba3b">aechanes_geodata</a>\',
+  }).addTo(map);
+
+  faults.bindPopup(function (layer) {
+    return L.Util.template(\'<p>{NAME} - {DESC_}</p>\', layer.feature.properties);
+  });
+	
+	makelegend_fromlist2(\'<span style="font-size: 20px">F</span>\',faultColors,faultLineStyles,\'PH Faults Legend\');
+
+	controlLayers.addOverlay(faults,\'Faults\'); // Add option to display
+  map.spin(false);
+	
+// END Phillipine fault display
+';
+} // end Phillippine faults
+
+if($faultDisplay == 'GEM') {
+print '// WORLD fault display code from GEM
+// Based on code from https://blogs.openquake.org/hazard/global-active-fault-viewer/
+// ISC-GEM Catalog
+var iscGemGjUrl = "https://gist.githubusercontent.com/cossatot/3904da668425cdd8534b7e287d0e1b04/raw/efcf80c6a32fc9b8f7aa3e129ae8c643d1536ac3/ISC-GEM_compact_6+.geojson"
+  var eqRenderer = L.canvas(
+  {
+    padding: 0.5
+  }
+  );
+
+// faults
+var faultColors =
+{
+  "Anticline": "grey",
+  "Blind Thrust": "black",
+  "Dextral": "blue",
+  "Dextral Transform": "blue",
+  "Dextral-Normal": "blue",
+  "Dextral-Oblique": "blue",
+  "Dextral-Reverse": "blue",
+  "Normal": "purple",
+  "Normal-Dextral": "purple",
+  "Normal-Sinistral": "purple",
+  "Normal-Strike-Slip": "orange",
+  "Reverse": "black",
+  "Reverse-Dextral": "black",
+  "Reverse-Sinistral": "black",
+  "Reverse-Strike-Slip": "orange",
+  "Sinistral": "#b936ff",
+  "Sinistral Transform": "#b936ff",
+  "Sinistral-Normal": "#b936ff",
+  "Sinistral-Reverse": "#b936ff",
+  "Spreading Ridge": "red",
+  "Strike-Slip": "orange",
+  "Subduction Thrust": "black",
+  "Syncline": "grey",
+  "": "green"
+};
+
+var faultColorsLegend = 
+{
+  "Anticline": "grey",
+  "Blind Thrust": "black",
+  "Dextral": "blue",
+  "Normal": "purple",
+  "Reverse": "black",
+  "Sinistral": "#b936ff",
+  "Spreading Ridge": "red",
+  "Strike-Slip": "orange",
+  "Subduction Thrust": "black",
+  "Syncline": "grey",
+  "Unspecified": "green"
+};
+
+var gafUrl = "https://raw.githubusercontent.com/GEMScienceTools/gem-global-active-faults/master/geojson/gem_active_faults_harmonized.geojson";
+
+gafUrl = "https://raw.githubusercontent.com/GEMScienceTools/gem-global-active-faults/master/geojson/gem_active_faults.geojson";
+
+// util functions
+function loadJSON(json_url, callback)
+{
+  var xobj = new XMLHttpRequest();
+  xobj.overrideMimeType("application/json");
+  xobj.open(\'GET\', json_url, true);
+  xobj.onreadystatechange = function ()
+  {
+    if (xobj.readyState == 4 && xobj.status == "200")
+    {
+      callback(xobj.responseText);
+    }
+  };
+  xobj.send(null);
+}
+map.spin(true,{ scale: 3 });
+
+loadJSON(gafUrl, function (response)
+ {
+  var gafJSON = JSON.parse(response);
+  faults = L.geoJSON(gafJSON,
+    {
+      style: function (feature)
+      {
+        if (feature.properties.slip_type != null)
+        {
+          return { "color": faultColors[feature.properties.slip_type], "weight": 1 };
+        }
+        else
+        {
+          return { "color": "green", "weight": 1 };
+        }
+      },
+      onEachFeature: function (feature, layer)
+      {
+        var attrs = ["<strong>Fault Information from GEM:</strong><br/>"];
+        for (key in feature.properties)
+        {
+          if (feature.properties[key] != null)
+          {
+            attrs.push("<em>" + key + "</em>: " + "<strong>" + feature.properties[key]+ "</strong>");
+          }
+        }
+        layer.bindPopup(attrs.join("<br />"))
+      },
+      attribution: \'Faults <a href="https://blogs.openquake.org/hazard/global-active-fault-viewer/">GEM</a>\'
+    }
+  ).addTo(map);
+  // console.log(faults);
+	controlLayers.addOverlay(faults,\'Faults\'); // do here, since asyncronous
+	
+	makelegend_fromlist(\'<span style="font-size: 20px">F</span>\',faultColorsLegend,\'GEM Faults Legend\');
+
+	map.spin(false);
+
+ }
+ 
+);
+
+
+const iscJson = fetch(iscGemGjUrl);
+
+iscJson
+.then(iscData => iscData.json())
+.then(data =>
+{
+  var eqLayer = L.geoJSON(data,
+    {
+      pointToLayer: function (feature, latlng)
+      {
+        return L.circleMarker(latlng,
+        {
+          renderer: eqRenderer,
+          radius: eqSize(feature.properties.mw),
+          color: feature.properties.color
+        }
+        );
+      },
+
+      onEachFeature: function (feature, layer)
+      {
+        var attrs = [];
+
+        attrs.push("Event ID: " + feature.properties.eventid);
+        attrs.push("Mw: " + feature.properties.mw);
+        attrs.push("Depth: " + feature.properties.depth + " km");
+        attrs.push("Date: " + feature.properties.date);
+
+        layer.bindPopup(attrs.join("<br />"))
+      }
+    }
+   )
+ }
+).catch(err => console.log(err));
+
+function eqSize(mw)
+{
+  return 0.01 * mw ** 4;
+}
+
+
+// END GEM WORLD fault display code
+';
+	
+} // end WORLD display
+
+if($faultDisplay == 'USGS') {
+	print '// overlay for USGS CONUS faults
+ map.spin(true);
+ faults = L.esri.dynamicMapLayer({
+    url: \'https://maps1.arcgisonline.com/ArcGIS/rest/services/USGS_Earthquake_Faults/MapServer\',
+		f: \'geoJSON\',
+    opacity: 0.7,
+		style: { color: \'#FF0000\', opacity: 0.7, weight: 1 },
+		attribution: \'Faults <a href="https://maps1.arcgisonline.com/ArcGIS/rest/services/USGS_Earthquake_Faults/MapServer">USGS</a>\',
+  }).addTo(map);
+
+    faults.bindPopup(function (error, featureCollection) {
+		
+    if (error || featureCollection.features.length === 0) {
+      return false;
+    } else {
+  			var html = featureCollection.features[0].properties.Name+"<br/>"+
+			"Age: "+featureCollection.features[0].properties.Age +" yrs.";
+    /*
+			var trate = featureCollection.features[0].properties.geo_slip_rate;
+			if(typeof trate == "string" && trate !== "Null") {
+			  html += ", Slip rate: "+trate + "mm/yr";
+			}
+			var tprob = featureCollection.features[0].properties.probability_of_activity;
+			if(typeof tprob == "string" && tprob !== "Null") {
+			  html += ", Probability: "+tprob*100 + " %";
+			}
+		  if(doDebug) {
+				console.log("typeof geo_slip_rate is "+typeof trate+" value="+trate);
+			  console.log("typeof probability_of_activity is "+typeof tprob+" value="+tprob);
+			}
+			*/
+      return html;
+		}
+		
+		
+  });
+		
+	controlLayers.addOverlay(faults,\'Faults\'); // Add option to display
+
+	makelegend(\'<span style="font-size: 20px">F</span>\',faults,\'USGS Faults Legend\');
+	
+	map.spin(false);
+	
+// end USGS fault display
+
+';
+	
+} // end USGS (CONUS) display
+
+if($faultDisplay == 'USGS2') {
+	print '// overlay for USGS CONUS faults
+ map.spin(true);
+ faults = L.esri.dynamicMapLayer({
+    url: \'https://earthquake.usgs.gov/arcgis/rest/services/eq/map_faults/MapServer\',
+		f: \'geoJSON\',
+    opacity: 0.7,
+		attribution: \'Faults <a href="https://earthquake.usgs.gov/arcgis/rest/services/eq/map_faults/MapServer">USGS</a>\',
+  }).addTo(map);
+
+    faults.bindPopup(function (error, featureCollection) {
+    if (error || featureCollection.features.length === 0) {
+      return false;
+    } else {
+			var html = featureCollection.features[0].properties.name+"<br/>"+
+			"Slip rate: "+featureCollection.features[0].properties.sliprate + " mm/yr, " +
+			"Age: "+featureCollection.features[0].properties.age + " yrs";
+		
+      return html;
+    }
+  });
+		
+	controlLayers.addOverlay(faults,\'Faults\'); // Add option to display
+	makelegend(\'<span style="font-size: 20px">F</span>\',faults,\'USGS Faults Legend\');
+  map.spin(false);
+// end USGS fault display
+
+';
+	
+} // end USGS (CONUS) display
+
+if($faultDisplay == 'USGS3') {
+	print '// overlay for USGS Hazard faults 2014 display
+ map.spin(true);
+ faults = L.esri.dynamicMapLayer({
+    url: \'https://earthquake.usgs.gov/arcgis/rest/services/haz/hazfaults2014/MapServer\',
+    opacity: 0.7,
+		f: \'image\',
+		format: \'png24\',
+		useCors: false,
+		attribution: \'Faults <a href="https://earthquake.usgs.gov/arcgis/rest/services/haz/hazfaults2014/MapServer">USGS</a>\',
+  }).addTo(map);
+
+  faults.bindPopup(function (error, featureCollection) {
+    if (error || featureCollection.features.length === 0) {
+      return false;
+    } else {
+			if(doDebug) {
+				console.log("featureCollection.features");
+				console.log(featureCollection.features);
+			}
+			var html = featureCollection.features[0].properties.NAME+" fault<br/>"+
+			"Type: "+featureCollection.features[0].properties.DISP_SLIP_;
+
+			var trate = featureCollection.features[0].properties.geo_slip_rate;
+			if(typeof trate == "string" && trate !== "Null") {
+			  html += ", Slip rate: "+trate + "mm/yr";
+			}
+			var tprob = featureCollection.features[0].properties.probability_of_activity;
+			if(typeof tprob == "string" && tprob !== "Null") {
+			  html += ", Probability: "+tprob*100 + " %";
+			}
+		  if(doDebug) {
+				console.log("typeof geo_slip_rate is "+typeof trate+" value="+trate);
+			  console.log("typeof probability_of_activity is "+typeof tprob+" value="+tprob);
+			}
+      return html;
+    }
+  });
+		
+	controlLayers.addOverlay(faults,\'Faults\'); // Add option to display
+	makelegend(\'<span style="font-size: 20px">F</span>\',faults,\'USGS Faults Legend\');
+  map.spin(false);
+// end USGS3 hazardous fault display
+
+';
+	
+} // end USGS (CONUS) display
+
+if($faultDisplay == 'WORLD') {
+	print '// overlay for World faults
+ var faultColorList = 
+	  ["gray","blue","orange","purple","red"];
+ var faultTypes = 
+	  ["n/a","rift","step","tectonic contact","thrust-fault"];
+ var faultTypesSimple = 
+	  ["n/a","rift","step","tectonic contact","thrust"];
+
+ map.spin(true);
+ faults = L.esri.featureLayer({
+    url: \'https://services.arcgis.com/nzS0F0zdNLvs7nc8/arcgis/rest/services/Sean_View_6/FeatureServer/0\',
+   /* 
+      style: function (feature)
+      {
+        if (feature.properties.RuleID != null)
+        {
+          return { color: faultColorList[feature.properties.RuleID], weight: 1 ,opacity: 0.7};
+        }
+        else
+        {
+          return { color: green, "weight": 1, opacity: 0.7 };
+        }
+      },
+		*/
+		attribution: \'Faults <a href="https://services.arcgis.com/nzS0F0zdNLvs7nc8/arcgis/rest/services/Sean_View_6/FeatureServer">ESRI</a>\',
+  }).addTo(map);
+
+
+faults.setStyle(function(feature){
+	if (feature.properties.RuleID != null)
+	{
+		return { color: faultColorList[feature.properties.RuleID], weight: 1 ,opacity: 0.7};
+	}
+	else
+	{
+		return { color: "green", "weight": 1, opacity: 0.7 };
+	}
+});
+	
+  faults.bindPopup(function (layer) {
+    return \'<p>Type: \'+ faultTypesSimple[layer.feature.properties.RuleID]+\' fault</p>\';
+  });
+	
+//console.log("faults.metadata dump in WORLD routine");
+//faults.metadata(function(error, metadata){
+//  console.log(metadata);
+//});
+
+  var faultColors = {};
+	for (i=0;i<faultColorList.length;i++) {
+		faultColors[faultTypes[i]] = faultColorList[i];
+	}
+	if(doDebug) {
+		console.log("faultColors");
+	  console.log(faultColors);
+	}
+	
+	controlLayers.addOverlay(faults,\'Faults\'); // Add option to display
+	makelegend_featureLayer(\'<span style="font-size: 20px">F</span>\',faults,\'Faults Legend\',faultColors);
+  map.spin(false);
+// end World fault display
+
+';
+	
+} // end World display
+
+// ESRI-BGS UK display
+if($faultDisplay == 'BGS') {
+	print '// overlay for ESRI-BGS UK faults
+   var faultColors = {
+		 "Fault at rockhead" : "blue",
+		 "Thrust Fault; barbs on hanging wall side" : "red"
+	 };
+   map.spin(true);
+   var faults = L.esri.featureLayer({
+    url: \'https://services.arcgis.com/WQ9KVmV6xGGMnCiQ/arcgis/rest/services/DiGMapGB/FeatureServer/1\',
+    
+    style: function (feature) {
+      var c;
+      var o = 0.7;
+      switch (feature.properties.FEATURE_D) {
+        case "Fault at rockhead":
+          c = "blue";
+          break;
+        case "Thrust Fault; barbs on hanging wall side":
+          c = "red";
+          break;
+        default:
+          c = "green";
+      }
+      return { color: c, opacity: o, weight: 2 };
+    },
+		
+		attribution: \'Faults <a href="https://www.arcgis.com/home/item.html?id=0b491d046f674a2c8703ee8cd8c8a7be">ESRI-BGS</a>\',
+  }).addTo(map);
+
+  faults.bindPopup(function (layer) {
+    return \'<p>\'+ layer.feature.properties.FEATURE_D+\'</p>\';
+  });
+
+	controlLayers.addOverlay(faults,\'Faults\'); // Add option to display
+	
+	makelegend_featureLayer(\'<span style="font-size: 20px">F</span>\',faults,\'Faults Legend\',faultColors);
+  map.spin(false);
+// end ESRI-BGS fault display
+
+';
+	
+} // end ESRI-BGS display
+
+
+print '
 var markers = L.markerClusterGroup( { maxClusterRadius: 15 });
 
 var markerImageRed    = new L.icon({ 
@@ -900,8 +1486,186 @@ function  createMarker (map,latLng, useMarkerIcon, title, popupHtml,label) {
 }
 
 map.addLayer(markers);
-L.control.scale().addTo(map);
-L.control.layers(baseLayers).addTo(map);
+
+// generate button and popup for legend from DynamicMap overlay
+function makelegend (buttonText,theOverlay,theTitle) {
+	//console.log("makelegend DynamicMap dump of theOverlay");
+	//console.log(theOverlay);
+	
+	var legend = theOverlay.legend(function(error, legend){
+	if(!error) {
+		if(doDebug) {
+			console.log("From dynamicMap overlay: dump of theOverlay.legend.layers");
+		  console.log(legend.layers);
+		}
+		var html = \'<span style="text-align: center; font-size: 125%;"><strong>\'+theTitle+\'</strong></span><br/><ul>\';
+		for(var i = 0, len = legend.layers.length; i < len; i++) {
+			html += \'<li><strong>\' + legend.layers[i].layerName + \'</strong><ul>\';
+			for(var j = 0, jj = legend.layers[i].legend.length; j < jj; j++){
+					html += L.Util.template(\'<li><img width="{width}" height="{height}" src="data:{contentType};base64,{imageData}"><span>{label}</span></li>\', legend.layers[i].legend[j]);
+			}
+			html += \'</ul></li>\';
+		}
+		html+=\'</ul>\';
+
+		//console.log(html);
+		var legendPopup = L.popup(
+		  {autopan:false,
+			 minWidth:250,
+			 offset:[0,200]
+			}).setContent(
+			 \'<div class="leaflet-legend-control">\'+html+\'</div>\'
+			 );
+
+		var legendButton = L.easyButton(buttonText, function(btn, map){
+			var latLng = map.getCenter();
+			legendPopup.setLatLng(latLng).openOn(map);
+		}).addTo(map);
+	}
+});
+
+	
+}
+
+// generate button and popup for legend from an object list
+
+function makelegend_fromlist (buttonText,theList,theTitle) {
+		var html = \'<span style="text-align: center; font-size: 125%;"><strong>\'+theTitle+\'</strong></span><br/><ul>\';
+    for (var index in theList) {			
+			html += \'<li><span style="font-size: 150%;color: \'+theList[index]+\'"><strong>&#9473;&#9473;&#9473;&#9473;</strong></span>&nbsp;\'+index+\'</li>\';
+		}
+
+		html+=\'</ul>\';
+
+		// console.log(html);
+		var legendPopup = L.popup(
+		  {autopan:false,
+			 minWidth:250,
+			 offset:[0,200]
+			}).setContent(
+			 \'<div class="leaflet-legend-control">\'+html+\'</div>\'
+			 );
+
+		var legendButton = L.easyButton(buttonText, function(btn, map){
+			var latLng = map.getCenter();
+			legendPopup.setLatLng(latLng).openOn(map);
+		}).addTo(map);
+
+}
+
+// generate button and popup for legend from an object list colors, styles
+
+function makelegend_fromlist2 (buttonText,theList,theStyle,theTitle) {
+		var html = \'<span style="text-align: center; font-size: 125%;"><strong>\'+theTitle+\'</strong></span><br/><ul>\';
+    for (var index in theList) {			
+			html += \'<li>\'+makelegend_svg(theStyle[index],theList[index])+\'<span style="height:30px;">&nbsp;\'+index+\'</span></li>\';
+		}
+
+		html+=\'</ul>\';
+
+		// console.log(html);
+		var legendPopup = L.popup(
+		  {autopan:false,
+			 minWidth:250,
+			 offset:[0,200]
+			}).setContent(
+			 \'<div class="leaflet-legend-control">\'+html+\'</div>\'
+			 );
+
+		var legendButton = L.easyButton(buttonText, function(btn, map){
+			var latLng = map.getCenter();
+			legendPopup.setLatLng(latLng).openOn(map);
+		}).addTo(map);
+
+}
+
+// make a dynamic legend from a FeatureLayer overlay
+
+function makelegend_featureLayer (buttonText,theOverlay,theTitle,faultColors) {
+
+// get the metadata to work with	
+	theOverlay.metadata(function(error, M){
+    if(doDebug) {
+			console.log("makelegend_featureLayer.metadata dump of theOverlay");
+		  console.log(M);
+		}
+
+		var legends = M.drawingInfo.renderer.uniqueValueInfos;
+
+		var html = \'<span style="text-align: center; font-size: 125%;"><strong>\'+M.name+\'</strong></span><br/><ul>\';
+    for (var i in legends) {
+      var name = legends[i].label;
+			var style = legends[i].symbol.style;
+			var color = \'rgb(\'+
+			  legends[i].symbol.color[0]+\',\'+
+			  legends[i].symbol.color[1]+\',\'+
+			  legends[i].symbol.color[2]+\')\';
+			if(doDebug) {
+				console.log("style="+style+"; name="+name);			
+			  console.log("i="+i+" faultColors[name]="+faultColors[name]);
+			}
+			if(typeof faultColors[name] != undefined) {
+				color = faultColors[name];
+			} else {
+				color = "green";
+			}
+			html +=\'<table><tbody><tr><td><div style="width:30px;height:30px;">\'+makelegend_svg(style,color)+\'</div></td><td>&nbsp;&nbsp;\'+name+\'</td></tr></tbody></table></li>\';
+      // console.log("legends "+i+" values");
+			// console.log(legends[i]);
+			// console.log("legends symbol");
+			// console.log(legends[i].symbol);
+			// var ourLine = new L.esri.Renderers.LineSymbol(legends[i].symbol);
+			// console.log("ourLine");
+			// console.log(ourLine);
+			// var rendered = new L.esri.Renderers.SimpleRenderer(ourLine);
+			// console.log("rendered");
+			// console.log(rendered);
+		}
+
+		html+=\'</ul>\';
+    if(doDebug) {
+			console.log("generated html");
+		  console.log(html);
+		}
+		var legendPopup = L.popup(
+		  {autopan:false,
+			 minWidth:250,
+			 offset:[0,200]
+			}).setContent(
+			 \'<div class="leaflet-legend-control">\'+html+\'</div>\'
+			 );
+
+		var legendButton = L.easyButton(buttonText, function(btn, map){
+			var latLng = map.getCenter();
+			legendPopup.setLatLng(latLng).openOn(map);
+			
+		}).addTo(map);
+		
+  }); // end metadata process
+}
+
+// Cheap hack-- slect line symbol SVG based on ESRI line style
+// SVGs cloned from www.arcgis.com/home/webmap/viewer.html legend interactive styling 
+
+function makelegend_svg(style,color) {
+	var ourSVG = "";
+	if(style == \'esriSLSSolid\') {
+		ourSVG = \'<svg overflow="hidden" width="30" height="30" style="touch-action: none;"><defs></defs><path fill="none" fill-opacity="0" stroke="\'+color+\'" stroke-opacity="1" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4" path="M -15,0 L 15,0 E" d="M-15 0L 15 0" stroke-dasharray="none" dojoGfxStrokeStyle="solid" transform="matrix(1.00000000,0.00000000,0.00000000,1.00000000,15.00000000,15.00000000)"></path></svg>\';
+	}
+	if(style == \'esriSLSDash\') {
+		ourSVG = \'<svg overflow="hidden" width="30" height="30" style="touch-action: none;"><defs></defs><path fill="none" fill-opacity="0" stroke="\'+color+\'" stroke-opacity="1" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4" path="M -15,0 L 15,0 E" d="M-15 0L 15 0" stroke-dasharray="4,3" dojoGfxStrokeStyle="dash" transform="matrix(1.00000000,0.00000000,0.00000000,1.00000000,15.00000000,15.00000000)"></path></svg>\';
+	}
+	if(style == \'esriSLSDot\') {
+		ourSVG = \'<svg overflow="hidden" width="30" height="30" style="touch-action: none;"><defs></defs><path fill="none" fill-opacity="0" stroke="\'+color+\'" stroke-opacity="1" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4" path="M -15,0 L 15,0 E" d="M-15 0L 15 0" stroke-dasharray="1,3" dojoGfxStrokeStyle="dot" transform="matrix(1.00000000,0.00000000,0.00000000,1.00000000,15.00000000,15.00000000)"></path></svg>\';
+	}
+	if(style == \'esriSLSDashDot\') {
+		ourSVG = \'<svg overflow="hidden" width="30" height="30" style="touch-action: none;"><defs></defs><path fill="none" fill-opacity="0" stroke="\'+color+\'" stroke-opacity="1" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4" path="M -15,0 L 15,0 E" d="M-15 0L 15 0" stroke-dasharray="4,3,1,3" dojoGfxStrokeStyle="dashdot" transform="matrix(1.00000000,0.00000000,0.00000000,1.00000000,15.00000000,15.00000000)"></path></svg>\';
+	}
+	if(style == \'esriSLSDashDotDot\') {
+		ourSVG = \'<svg overflow="hidden" width="30" height="30" style="touch-action: none;"><defs></defs><path fill="none" fill-opacity="0" stroke="\'+color+\'" stroke-opacity="1" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4" path="M -15,0 L 15,0 E" d="M-15 0L 15 0" stroke-dasharray="4,1,1,1,1,1" dojoGfxStrokeStyle="shortdashdotdot" transform="matrix(1.00000000,0.00000000,0.00000000,1.00000000,15.00000000,15.00000000)"></path></svg>\';
+	}
+	return (ourSVG);
+}
 
 // end of map generation script	
 // ]]>
@@ -1158,49 +1922,58 @@ function QJ_fetch_microtime()
 //  testing function to safely set location/distance/zone using testloc= parm 
 function setTestLoc ( $LOC )
 {
-  global $myLat,$myLong,$ourTZ,$maxDistance;
+  global $myLat,$myLong,$ourTZ,$maxDistance,$faultDisplay;
   
   if ($LOC == 'NZ') {
     $myLat = -37.07;   
     $myLong = 174.35; 
     $ourTZ = "Pacific/Auckland";  
-	$maxDistance = 1000;
+	  $maxDistance = 1000;
+	  $faultDisplay = 'GEM';
 // Yes, the above settings are for Brian Hamilton's Grahams Beach, NZ station
 // in honor of his outstanding work as author of Weather-Display software
   } elseif ($LOC == 'JP') {
     $myLat = 35.8499;   
     $myLong = 139.97; 
     $ourTZ = "Asia/Tokyo";  
-	$maxDistance = 1000;
+	  $faultDisplay = 'GEM';
+	  $maxDistance = 1000;
   } elseif ($LOC == 'MX') {
-     $myLat = 19.3999;   
+    $myLat = 19.3999;   
     $myLong = -99.1999; 
-    $ourTZ = "America/Mexico_City";  
+    $ourTZ = "America/Mexico_City";
+		$faultDisplay="GEM";
+		  
 	$maxDistance = 1000;
   } elseif ($LOC == 'PR') {
     $myLat = 18.467248;   
     $myLong = -66.108963; 
     $ourTZ = "America/Puerto_Rico";  
-	$maxDistance = 2000;
+	  $maxDistance = 2000;
+	  $faultDisplay = 'GEM';
   } elseif ($LOC == 'AK') {
      $myLat = 61.21574783;   
     $myLong = -149.86894226; 
-    $ourTZ = "America/Anchorage";  
-	$maxDistance = 2000;
+    $ourTZ = "America/Anchorage";
+		$faultDisplay='USGS2';
+		$maxDistance = 2000;
   } elseif ($LOC == 'IR') {
      $myLat = 35.68;   
     $myLong = 51.3499; 
     $ourTZ = "Asia/Tehran";  
+		$faultDisplay='GEM';
 	$maxDistance = 1000;
   } elseif ($LOC == 'GR') {
      $myLat = 37.983056;   
     $myLong = 23.733056; 
     $ourTZ = "Europe/Athens";  
+		$faultDisplay='GEM';
 	$maxDistance = 1000;
   } elseif ($LOC == 'SU') {
      $myLat = 3.0;   
     $myLong = 100.0; 
     $ourTZ = "Asia/Jakarta";  
+		$faultDisplay='GEM';
 	$maxDistance = 1000;
   }
 

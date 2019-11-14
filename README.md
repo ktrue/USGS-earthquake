@@ -4,7 +4,9 @@ Here in California, we're a bit sensitive to the earth moving (it happens a lot)
 
 The output of these scripts is XHTML 1.0-Strict compliant. All of them use the same style for inclusion into your webpage as shown in the example below.
 
-**Note:** Version 2.00 of the script replaced Google maps with Leaflet/OpenStreetMaps scripts, so you no longer need a Google API key (or any API key to use the 5 included maps with the script.  
+**Note:** Version 2.00 of the script replaced Google maps with Leaflet/OpenStreetMaps scripts, so you no longer need a Google API key (or any API key to use the 5 included maps with the script.
+
+**Note:** Version 3.00 of the script set added optional displays of tectonic plates and/or faults to the map display. Also added were options to select the NatGeo and Delorme (Garmin) maps as basemaps to the display.  Neither require an API key to be used.
 
 If you wish to use the OPTIONAL Mapbox.com tiles (terrain3, Satellite maps), you will need a Mapbox.com API key (called an "Access Token") which can be acquired (for free with 50K accesses usage/month) at:
 
@@ -25,52 +27,67 @@ The USA/World earthquake script uses the new USGS GeoJSON feed for data and prov
 <img src="./sample-output.png" alt="sample output">
 
 This was invoked by using the following code:
-```
+```php
 <?php
-# settings --------------------------
-  $doIncludeQuake = true;
+$doIncludeQuake = true;
 # uncomment ONE of the $setDistanceDisplay lines to use as template for distance displays  
 #  $setDistanceDisplay = 'mi (km)';
-  $setDistanceDisplay = 'mi';
+$setDistanceDisplay = 'mi';
 #  $setDistanceDisplay = 'km (mi)';
 #  $setDistanceDisplay = 'km';
 
-  $setDistanceRadius  = 200;  // same units as first unit in $setDistanceDisplay
+$setDistanceRadius  = 1000;  // same units as first unit in $setDistanceDisplay
 # NOTE: quakes of magnitude 1.0+ are available for USA locations only.
 #    non-USA location earthquakes of magnitude 4.0+ are the only ones available from the USGS
-  $setMinMagnitude = '2.0';  // minimum Richter Magnitude to display
-  $setHighMagnitude = '4.0';  // highlight this Magnitude and greater
+$setMinMagnitude = '2.0';  // minimum Richter Magnitude to display
+$setHighMagnitude = '4.0';  // highlight this Magnitude and greater
 
-  $setMapZoomDefault = 7;    // default zoom for Google Map 1=world to 13=street
+$setMapZoomDefault = 5;    // default zoom for Google Map 1=world to 13=street
 
-# script will use your $SITE[] values for latitude, longitude, timezone and time display format
-  $setLatitude  = 37.2746251;    //North=positive, South=negative decimal degrees
-  $setLongitude = -122.0229656;   //East=positive, West=negative decimal degrees
+# script will use your $SITE[] values for latitude, longitude, cityname, timezone and time display format
+# but you can override them if you with with the commented statements below:
+$setLatitude  = 37.2746251;    //North=positive, South=negative decimal degrees
+$setLongitude = -122.0229656;   //East=positive, West=negative decimal degrees
 # The above settings are for saratoga-weather.org location
-  $setLocationName = 'Saratoga, CA'; // city/town name for lat/long above
+$setLocationName = 'Saratoga, CA'; // city/town name for lat/long above
 #
-  $setTimeZone = "America/Los_Angeles";  //NOTE: this *MUST* be set correctly to
+$setTimeZone = "America/Los_Angeles";  //NOTE: this *MUST* be set correctly to
 # translate UTC times to your LOCAL time for the displays.
 # Use http://www.php.net/manual/en/timezones.php to find the timezone suitable for
 #  your location.
 
 #  pick a format for the time to display ..uncomment one (or make your own)
 # $setTimeFormat = 'D, Y-m-d H:i:s T';  // Fri, 2006-03-31 14:03:22 TZone
-  $setTimeFormat = 'D, d-M-Y H:i:s T';  // Fri, 31-Mar-2006 14:03:22 TZone
+$setTimeFormat = 'D, d-M-Y H:i:s T';  // Fri, 31-Mar-2006 14:03:22 TZone
 
-  $setDoLinkTarget = false;   // =true; to have links open in new page, =false; for XHTML 1.0-Strict
-
-	$mapProvider = 'Esri_WorldTopoMap'; // ESRI topo map - no key needed
+$setMapProvider = 'Esri_WorldTopoMap'; // ESRI topo map - no key needed
 # $setMapProvider = 'OSM';     // OpenStreetMap - no key needed
 # $setMapProvider = 'Terrain'; // Terrain map by stamen.com - no key needed
 # $setMapProvider = 'OpenTopo'; // OpenTopoMap.com - no key needed
 # $setMapProvider = 'Wikimedia'; // Wikimedia map - no key needed
-
+# $setMapProvider = 'NatGeo';  // National Geographic world map -no key needed  
+# $setMapProvider = 'Delorme';  // Garmin world map -no key needed  
 # $mapProvider = 'MapboxSat';  // Map by Mapbox.com - API KEY needed in $setMapboxAPIkey
 # $mapProvider = 'MapboxTer';  // Map by Mapbox.com - API KEY needed in $setMapboxAPIkey
- $setMapboxAPIkey = '--mapbox-API-key--';  // use this for the API key to MapBox
+# $setMapboxAPIkey = '--mapbox-API-key--';  // use this for the API key to MapBox
 
-  include_once("quake-json.php");
+# for fault displays
+$setFaultDisplay = 'USGS'; // ='' for none, see below for more choices
+# Note: not all fault displays have entries for all countries. You'll need to choose the one that
+#   displays the information for your geography.
+#
+# 'PH' covers the Phillipines only
+# 'USGS' covers the lower-48 CONUS states only but with fault types/names/ages
+# 'USGS2' covers all 50 US states, but with only small/medium/large fault types (no descriptions)
+# 'USGS3' covers the mostly western CONUS lower-48 states only  with fault names and types only
+# 'GEM' covers much of the world (omitting Canada, Scandanavia and UK/Ireland)
+# 'WORLD' covers most of the world with 4 fault types (  rift, step, tectonic contact, thrust-fault)
+# 'BGS' convers the UK (England, Wales, Scotland, Northern Ireland)
+#
+$setPlateDisplay = true;  // =true; show tectonic plates ; =false; suppress tectonic plate display
+
+
+include_once("quake-json.php");
 ?>
 ```
 
@@ -107,4 +124,4 @@ langlookup|Map and data courtesy of|Map and data courtesy of|
 langlookup|United States Geological Survey|United States Geological Survey|
 ```
 
-The **quake-json.php** script uses the USGS new GeoJSON feed for **1.0+** (USA) and **4.0+** (World) magnitude events and replaces the functionality of the above scripts.
+The **quake-json.php** script uses the USGS new GeoJSON feed for **1.0+** (USA) and **4.0+** (World) magnitude events.

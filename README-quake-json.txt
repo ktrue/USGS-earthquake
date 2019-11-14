@@ -2,6 +2,7 @@ Readme file for quake-json.php
 Version 1.00 - 08-Sep-2012 - initial release
 Version 1.01 - 03-Jul-2016 - updates for mandatory Google Browser JavaScript Map API key
 Version 2.00 - 10-May-2018 - rewrite to use Leaflet/OpenStreetMaps+other tile providers
+Version 3.00 - 13-Nov-2019 - added optional fault/tectonic plate displays to maps, added NatGeo and Delorme maps
 
 With Version 2.00, you no longer need an API key for multiple map tile providers to use the script.
 
@@ -35,7 +36,9 @@ quakesjson.txt        sample cache file of page returned from USGS GeoGSON query
 
 If at all possible, consider NOT modifying the quake-json.php script when doing customizations .. it
 will make it easier on you to just replace the quake-json.php script when updates are available.
-
+Instead, modify either quakes.php or wxquake.php settings areas.  Also, most of the settings are available
+in Settings.php $SITE[] variables to override any settings in the wxquake.php page.
+See the README.md for details.
 
 For AJAX/PHP template users, the following entries should be added to the language-LL.txt
 translation file (LL= language translation id)
@@ -44,8 +47,6 @@ Note: the |of| entry below is used in the reports for quake location as in:
   20 mi NNW of Saratoga, California
 
 The cardinal wind direction will be automatically translated ot other languages.
-
-
 
 langlookup|Update time|Update time|
 langlookup|of|of|

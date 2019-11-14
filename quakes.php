@@ -68,6 +68,7 @@ body {
   background-color: #76A6FC;
   border-radius: 4px;
 }
+
 </style>
 <link rel="stylesheet" href="quake-json.css"/>
 <script type="text/javascript" src="quake-json.js"></script>
@@ -86,18 +87,18 @@ body {
 #  $setDistanceDisplay = 'km (mi)';
 #  $setDistanceDisplay = 'km';
 
-  $setDistanceRadius  = 200;  // same units as first unit in $setDistanceDisplay
+  $setDistanceRadius  = 1000;  // same units as first unit in $setDistanceDisplay
 # NOTE: quakes of magnitude 1.0+ are available for USA locations only.
 #    non-USA location earthquakes of magnitude 4.0+ are the only ones available from the USGS
   $setMinMagnitude = '2.0';  // minimum Richter Magnitude to display
   $setHighMagnitude = '4.0';  // highlight this Magnitude and greater
   
-  $setMapZoomDefault = 7;    // default zoom for Google Map 1=world to 13=street
-
+# script will use your $SITE[] values for latitude, longitude, cityname, timezone and time display format
+# but you can override them if you with with the commented statements below:
   $setLatitude  = 37.2746251;    //North=positive, South=negative decimal degrees
   $setLongitude = -122.0229656;   //East=positive, West=negative decimal degrees
 # The above settings are for saratoga-weather.org location
-  $setLocationName = 'Saratoga, CA'; // city/town name for lat/long above 
+#  $setLocationName = 'Saratoga, CA'; // city/town name for lat/long above 
 #
   $setTimeZone = "America/Los_Angeles";  //NOTE: this *MUST* be set correctly to
 # translate UTC times to your LOCAL time for the displays.
@@ -105,21 +106,38 @@ body {
 #  your location.
 
 #  pick a format for the time to display ..uncomment one (or make your own)
-# $setTimeFormat = 'D, Y-m-d H:i:s T';  // Fri, 2006-03-31 14:03:22 TZone
-  $setTimeFormat = 'D, d-M-Y H:i:s T';  // Fri, 31-Mar-2006 14:03:22 TZone
+ $setTimeFormat = 'D, Y-m-d H:i:s T';  // Fri, 2006-03-31 14:03:22 TZone
+#  $setTimeFormat = 'D, d-M-Y H:i:s T';  // Fri, 31-Mar-2006 14:03:22 TZone
 
   $setDoLinkTarget = false;   // =true; to have links open in new page, =false; for XHTML 1.0-Strict
 
-	$mapProvider = 'Esri_WorldTopoMap'; // ESRI topo map - no key needed
+	$setMapProvider = 'Esri_WorldTopoMap'; // ESRI topo map - no key needed
 # $setMapProvider = 'OSM';     // OpenStreetMap - no key needed
 # $setMapProvider = 'Terrain'; // Terrain map by stamen.com - no key needed
 # $setMapProvider = 'OpenTopo'; // OpenTopoMap.com - no key needed
 # $setMapProvider = 'Wikimedia'; // Wikimedia map - no key needed
-  
+# $setMapProvider = 'NatGeo';  // National Geographic world map -no key needed  
+# $setMapProvider = 'Delorme';  // Garmin world map -no key needed  
 # $mapProvider = 'MapboxSat';  // Map by Mapbox.com - API KEY needed in $setMapboxAPIkey 
 # $mapProvider = 'MapboxTer';  // Map by Mapbox.com - API KEY needed in $setMapboxAPIkey 
  $setMapboxAPIkey = '--mapbox-API-key--';  // use this for the API key to MapBox
+ 
+# for fault displays
+ $setFaultDisplay = 'USGS'; // ='' for none, see below for more choices
+# Note: not all fault displays have entries for all countries. You'll need to choose the one that
+#   displays the information for your geography.
+#
+# 'PH' covers the Phillipines only
+# 'USGS' covers the lower-48 CONUS states only but with fault types/names/ages
+# 'USGS2' covers all 50 US states, but with only small/medium/large fault types (no descriptions)
+# 'USGS3' covers the mostly western CONUS lower-48 states only  with fault names and types only
+# 'GEM' covers much of the world (omitting Canada, Scandanavia and UK/Ireland)
+# 'WORLD' covers most of the world with 4 fault types (  rift, step, tectonic contact, thrust-fault)
+# 'BGS' convers the UK (England, Wales, Scotland, Northern Ireland) 
+#
 
+ $setPlateDisplay = true;  // =true; show tectonic plates ; =false; suppress tectonic plate display
+ 
   include_once("quake-json.php");
   ?>
   <p class="quakes" style="text-align: center">Map and data courtesy of 

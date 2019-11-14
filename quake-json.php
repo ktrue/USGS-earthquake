@@ -899,6 +899,7 @@ var plates = L.esri.dynamicMapLayer({
     url: \'https://earthquake.usgs.gov/arcgis/rest/services/eq/map_plateboundaries/MapServer\',
 		f: \'geoJSON\',
     opacity: 0.7,
+		useCors: false,
 		attribution: \'Plates <a href="https://earthquake.usgs.gov/arcgis/rest/services/eq/map_plateboundaries/MapServer">USGS</a>\',
   }).addTo(map);
 
@@ -1167,6 +1168,7 @@ if($faultDisplay == 'USGS') {
     url: \'https://maps1.arcgisonline.com/ArcGIS/rest/services/USGS_Earthquake_Faults/MapServer\',
 		f: \'geoJSON\',
     opacity: 0.7,
+		useCors: false,
 		style: { color: \'#FF0000\', opacity: 0.7, weight: 1 },
 		attribution: \'Faults <a href="https://maps1.arcgisonline.com/ArcGIS/rest/services/USGS_Earthquake_Faults/MapServer">USGS</a>\',
   }).addTo(map);
@@ -1217,6 +1219,7 @@ if($faultDisplay == 'USGS2') {
     url: \'https://earthquake.usgs.gov/arcgis/rest/services/eq/map_faults/MapServer\',
 		f: \'geoJSON\',
     opacity: 0.7,
+		useCors: false,
 		attribution: \'Faults <a href="https://earthquake.usgs.gov/arcgis/rest/services/eq/map_faults/MapServer">USGS</a>\',
   }).addTo(map);
 

@@ -18,8 +18,9 @@
 // Version 2.00 - 10-May-2018 - rewritten to use Leaflet/OpenStreetMaps + others for display
 // Version 2.01 - 29-Oct-2019 - adapted for Phillippines display of earthquake faults
 // Version 3.00 - 13-Nov-2019 - generalized for optional dislay of faults/tectonic plates from multiple sources
+// Version 3.01 - 26-May-2020 - fix cache issue for HTTP/2 returns from USGS site
 
-  $Version = 'quake-json.php V3.00 - 13-Nov-2019';
+  $Version = 'quake-json.php V3.01 - 26-May-2020';
 //  error_reporting(E_ALL);  // uncomment to turn on full error reporting
 //
 // script available at http://saratoga-weather.org/scripts.php
@@ -493,13 +494,14 @@ if (file_exists($cacheName) and filemtime($cacheName) + $refetchSeconds > time()
 	  if (preg_match("|^HTTP\/\S+ (.*)\r\n|",$rawhtml,$matches)) {
 	    $RC = trim($matches[1]);
 	  }
-	  if(!preg_match('|200 |',$RC)) {
+	  if(!preg_match('|200|',$RC)) {
          print "<!-- fetch returns RC='".$RC."' for $fileName -->\n";
 	  } else {
 		$fp = fopen($cacheName, "w");
 		if ($fp) {
 		  $write = fputs($fp, $rawhtml);
 		  fclose($fp);
+			print "<!-- cache file $cacheName updated -->\n";
 		} else {
 		  print "<!-- unable to write cache file $cacheName -->\n";
 		}

@@ -19,8 +19,9 @@
 // Version 2.01 - 29-Oct-2019 - adapted for Phillippines display of earthquake faults
 // Version 3.00 - 13-Nov-2019 - generalized for optional dislay of faults/tectonic plates from multiple sources
 // Version 3.01 - 26-May-2020 - fix cache issue for HTTP/2 returns from USGS site
+// Version 3.02 - 27-Jun-2020 - add name translation to fix Hawaiian names (replace 'P?hala' with 'P&amacr;hala' )
 
-  $Version = 'quake-json.php V3.01 - 26-May-2020';
+  $Version = 'quake-json.php V3.02 - 27-Jun-2020';
 //  error_reporting(E_ALL);  // uncomment to turn on full error reporting
 //
 // script available at http://saratoga-weather.org/scripts.php
@@ -167,6 +168,10 @@ $SITE['mapboxAPIkey'] = '-replace-this-with-your-API-key-here-';
 # 'BGS' convers the UK (England, Wales, Scotland, Northern Ireland) 
 #
  $plateDisplay = true; // =true; show tectonic plates , =false; suppress display of tectonic plates
+ 
+ $nameTrans = array(   // optional location name translation
+ 'P?hala' => 'P&amacr;hala',
+ );
 	
 // end of settings -------------------------------------------------------------
 
@@ -525,6 +530,12 @@ if (file_exists($cacheName) and filemtime($cacheName) + $refetchSeconds > time()
 	$utimestamp = time();  // get unix time for date
 	print "<!-- using now as last modified date ".gmdate($timeFormat,$utimestamp)." UTC -->\n";
   }
+	$nameTransFrom = array();
+	$nameTransTo   = array();
+	foreach ($nameTrans as $from => $to) {
+		$nameTransFrom[] = $from;
+		$nameTransTo[]   = $to;
+	}
 
   $updatedUTC = langtransstr('Update time') . " = " . gmdate($timeFormat,$utimestamp);
   $updated = langtransstr('Update time') . " = " . date($timeFormat,$utimestamp);
@@ -700,7 +711,7 @@ if (file_exists($cacheName) and filemtime($cacheName) + $refetchSeconds > time()
 	  if(isset($matches[2])) {
 		  $kmLoc = $matches[1];
 		  $locDir = langtransstr($matches[2]);
-		  $locText = $matches[3];
+		  $locText = str_replace($nameTransFrom,$nameTransTo,$matches[3]);
 		  $miLoc = round($kmLoc/1.609344,0);
 		  $location = $distanceDisplay; // load template
 		  $location = preg_replace('|mi|',"$miLoc mi",$location);
@@ -769,6 +780,7 @@ if (file_exists($cacheName) and filemtime($cacheName) + $refetchSeconds > time()
 	    $doneHeader = 1;
 	  } // end doneHeader
 // --------------- customize HTML if you like -----------------------
+      $location = str_replace($nameTransFrom,$nameTransTo,$location);
 	    print "$tStatus
 <tr>
   <td align=\"left\" style=\"white-space:normal\"><a href=\"$mapURL\"$tgt>$location</a></td>

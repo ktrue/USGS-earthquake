@@ -20,8 +20,9 @@
 // Version 3.00 - 13-Nov-2019 - generalized for optional dislay of faults/tectonic plates from multiple sources
 // Version 3.01 - 26-May-2020 - fix cache issue for HTTP/2 returns from USGS site
 // Version 3.02 - 27-Jun-2020 - add name translation to fix Hawaiian names (replace 'P?hala' with 'P&amacr;hala' )
+// Version 3.03 - 30-Jun-2020 - add $SITE['USGStranslate'] support to augment replacement of location names
 
-  $Version = 'quake-json.php V3.02 - 27-Jun-2020';
+  $Version = 'quake-json.php V3.03 - 30-Jun-2020';
 //  error_reporting(E_ALL);  // uncomment to turn on full error reporting
 //
 // script available at http://saratoga-weather.org/scripts.php
@@ -169,8 +170,17 @@ $SITE['mapboxAPIkey'] = '-replace-this-with-your-API-key-here-';
 #
  $plateDisplay = true; // =true; show tectonic plates , =false; suppress display of tectonic plates
  
- $nameTrans = array(   // optional location name translation
- 'P?hala' => 'P&amacr;hala',
+# optional location name translation - use only &#nnnn; or &#xnnnn; form for HTML validation
+# and NOT the &{name}; format.. it will cause the validator.w3c.org to incorrectly cite them
+# as HTML errors (even if the page displays correctly);
+#
+# see https://www.w3schools.com/charsets/ref_utf_latin_extended_a.asp for a list of numeric/hex entities
+#
+# Note: a $SITE['USGStranslate'] array in Settings.php will be merged with this set - do your customization there
+#
+ $nameTrans = array(   
+ 'P?hala' => 'P&#257;hala',
+ 'Or?ova' => 'Or&#351;ova',
  );
 	
 // end of settings -------------------------------------------------------------
@@ -209,6 +219,8 @@ if (isset($SITE['distanceDisplay'])) {$distanceDisplay = $SITE['distanceDisplay'
 if (isset($SITE['mapboxAPIkey']))    {$mapboxAPIkey = $SITE['mapboxAPIkey']; }
 if (isset($SITE['faultDisplay']))    {$faultDisplay = $SITE['faultDisplay']; }
 if (isset($SITE['plateDisplay']))    {$plateDisplay = $SITE['plateDisplay']; }
+if (isset($SITE['USGStranslate']) and is_array($SITE['USGStranslate']))   
+      {$nameTrans = array_merge($nameTrans,$SITE['USGStranslate']); }
 // end of overrides from Settings.php
 
 # Shim function if run outside of AJAX/PHP template set
